@@ -167,6 +167,49 @@
       font-family: "IBM Plex Mono", monospace;
       font-size: 1.1rem;
     }
+    .daily-goal {
+      display: grid;
+      gap: 9px;
+      min-width: 220px;
+    }
+    .goal-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .goal-heading-label, .goal-summary {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .68rem;
+    }
+    .goal-dots {
+      display: flex;
+      gap: 5px;
+    }
+    .goal-dot {
+      width: 10px;
+      height: 10px;
+      border: 1px solid var(--moss);
+      background: transparent;
+    }
+    .goal-dot.is-complete { background: var(--moss); }
+    .break-mode .goal-dot { border-color: var(--paper); }
+    .break-mode .goal-dot.is-complete { background: var(--paper); }
+    .goal-options {
+      display: flex;
+      gap: 5px;
+    }
+    .goal-option {
+      min-width: 25px;
+      min-height: 25px;
+      padding: 3px 5px;
+      border: 1px solid currentColor;
+      background: transparent;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .67rem;
+    }
+    .goal-option[aria-pressed="true"] { background: var(--moss); color: var(--paper); }
+    .break-mode .goal-option[aria-pressed="true"] { background: var(--paper); color: var(--moss); }
     .sound-toggle {
       display: inline-flex;
       align-items: center;
@@ -363,7 +406,23 @@
       </div>
 
       <div class="timer-meta">
-        <span><span class="sessions-count" id="sessions-count">0</span> sessions today</span>
+        <span class="sessions-today"><span class="sessions-count" id="sessions-count">0</span> sessions today</span>
+        <div class="daily-goal">
+          <div class="goal-heading">
+            <span class="goal-heading-label">Daily goal</span>
+            <span class="goal-summary" id="goal-summary">0 / 4 sessions</span>
+          </div>
+          <div class="goal-dots" id="goal-dots" role="progressbar" aria-label="Daily focus goal" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0"></div>
+          <div class="goal-options" id="goal-options" role="group" aria-label="Choose daily focus goal">
+            <button class="goal-option" type="button" data-goal="2" aria-pressed="false">2</button>
+            <button class="goal-option" type="button" data-goal="3" aria-pressed="false">3</button>
+            <button class="goal-option" type="button" data-goal="4" aria-pressed="true">4</button>
+            <button class="goal-option" type="button" data-goal="5" aria-pressed="false">5</button>
+            <button class="goal-option" type="button" data-goal="6" aria-pressed="false">6</button>
+            <button class="goal-option" type="button" data-goal="7" aria-pressed="false">7</button>
+            <button class="goal-option" type="button" data-goal="8" aria-pressed="false">8</button>
+          </div>
+        </div>
         <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="true">Sound on</button>
       </div>
     </section>
@@ -406,6 +465,9 @@
       const pauseButton = document.getElementById("pause-button");
       const resetButton = document.getElementById("reset-button");
       const soundToggle = document.getElementById("sound-toggle");
+      const goalOptions = [...document.querySelectorAll(".goal-option")];
+      const goalDots = document.getElementById("goal-dots");
+      const goalSummary = document.getElementById("goal-summary");
       const progress = document.querySelector(".progress-fill");
       const progressTrack = document.querySelector(".progress-track");
       const sessionsCount = document.getElementById("sessions-count");
@@ -421,6 +483,7 @@
         "Rest your eyes. The screen will still be here."
       ];
       let selectedPreset = 0;
+      let dailyGoal = 4;
       let isBreak = false;
       let isRunning = false;
       let soundOn = true;
@@ -471,7 +534,31 @@
       }
 
       function saveSettings() {
-        writeStorage(STORAGE_KEYS.settings, { selectedPreset, soundOn });
+        writeStorage(STORAGE_KEYS.settings, { selectedPreset, soundOn, dailyGoal });
+      }
+
+      function updateGoalProgress() {
+        const completed = Math.min(sessions.count, dailyGoal);
+        goalDots.replaceChildren();
+        for (let index = 0; index < dailyGoal; index += 1) {
+          const dot = document.createElement("span");
+          dot.className = `goal-dot${index < completed ? " is-complete" : ""}`;
+          dot.setAttribute("aria-hidden", "true");
+          goalDots.append(dot);
+        }
+        goalDots.setAttribute("aria-valuemax", String(dailyGoal));
+        goalDots.setAttribute("aria-valuenow", String(completed));
+        goalDots.setAttribute("aria-label", `Daily focus goal: ${completed} of ${dailyGoal} sessions`);
+        goalSummary.textContent = `${sessions.count} / ${dailyGoal} sessions`;
+      }
+
+      function setDailyGoal(goal) {
+        dailyGoal = goal;
+        goalOptions.forEach((option) => {
+          option.setAttribute("aria-pressed", String(Number(option.dataset.goal) === dailyGoal));
+        });
+        updateGoalProgress();
+        saveSettings();
       }
 
       function setPreset(index) {
@@ -523,6 +610,7 @@
       function saveSessions() {
         writeStorage(STORAGE_KEYS.sessions, sessions);
         sessionsCount.textContent = String(sessions.count);
+        updateGoalProgress();
       }
 
       function refreshSessionsForToday() {
@@ -661,6 +749,12 @@
         saveSettings();
       });
 
+      goalOptions.forEach((option) => {
+        option.addEventListener("click", () => {
+          setDailyGoal(Number(option.dataset.goal));
+        });
+      });
+
       taskForm.addEventListener("submit", (event) => {
         event.preventDefault();
         const text = taskInput.value.trim();
@@ -687,6 +781,9 @@
       if (savedSettings && typeof savedSettings.soundOn === "boolean") {
         soundOn = savedSettings.soundOn;
       }
+      if (savedSettings && Number.isInteger(savedSettings.dailyGoal) && savedSettings.dailyGoal >= 2 && savedSettings.dailyGoal <= 8) {
+        dailyGoal = savedSettings.dailyGoal;
+      }
       const savedTasks = readStorage(STORAGE_KEYS.tasks, []);
       if (Array.isArray(savedTasks)) {
         tasks = savedTasks.filter((task) => task && typeof task.text === "string" && typeof task.done === "boolean");
@@ -700,6 +797,7 @@
       soundToggle.textContent = soundOn ? "Sound on" : "Sound off";
       sessionsCount.textContent = String(sessions.count);
       renderTasks();
+      setDailyGoal(dailyGoal);
       setPreset(selectedPreset);
       updateDisplay();
     })();
