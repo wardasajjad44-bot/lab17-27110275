@@ -259,7 +259,7 @@
     .task-row {
       min-height: 54px;
       display: grid;
-      grid-template-columns: 31px 1fr 30px;
+      grid-template-columns: 31px minmax(0, 1fr) 30px 30px;
       align-items: center;
       border-bottom: var(--rule);
       counter-increment: task;
@@ -288,6 +288,31 @@
     }
     .task-check:checked { background: var(--moss); box-shadow: inset 0 0 0 4px var(--page); }
     .break-mode .task-check:checked { background: var(--paper); }
+    .task-delete {
+      justify-self: end;
+      width: 24px;
+      height: 32px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 1rem;
+    }
+    .task-actions {
+      display: flex;
+      justify-content: flex-end;
+      padding: 9px 0;
+      border-bottom: var(--rule);
+    }
+    .clear-done {
+      border: 0;
+      padding: 3px 0;
+      background: transparent;
+      font-size: .76rem;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+    .clear-done:disabled { cursor: default; opacity: .5; }
     .task-check:focus-visible, button:focus-visible, input:focus-visible, a:focus-visible {
       outline: 2px solid var(--apricot);
       outline-offset: 3px;
@@ -440,6 +465,9 @@
         <span class="task-count" id="task-count" aria-live="polite">0 tasks left</span>
       </div>
       <ol class="task-list" id="task-list" aria-label="To-do list"></ol>
+      <div class="task-actions">
+        <button class="clear-done" id="clear-done" type="button" disabled>Clear done</button>
+      </div>
       <form class="task-form" id="task-form">
         <input class="task-input" id="task-input" type="text" maxlength="160" placeholder="Add a task" aria-label="Add a task" autocomplete="off">
         <button class="task-add" type="submit">Add +</button>
@@ -485,6 +513,7 @@
       const taskForm = document.getElementById("task-form");
       const taskInput = document.getElementById("task-input");
       const taskCount = document.getElementById("task-count");
+      const clearDoneButton = document.getElementById("clear-done");
 
       const breakTips = [
         "Look out a window. Let your eyes go somewhere far away.",
@@ -731,12 +760,29 @@
             writeStorage(STORAGE_KEYS.tasks, tasks);
             renderTasks();
           });
-          row.append(text, checkbox);
+          const deleteButton = document.createElement("button");
+          deleteButton.className = "task-delete";
+          deleteButton.type = "button";
+          deleteButton.textContent = "×";
+          deleteButton.setAttribute("aria-label", `Delete "${task.text}"`);
+          deleteButton.addEventListener("click", () => {
+            tasks.splice(index, 1);
+            writeStorage(STORAGE_KEYS.tasks, tasks);
+            renderTasks();
+          });
+          row.append(text, checkbox, deleteButton);
           taskList.append(row);
         });
         const remainingTasks = tasks.filter((task) => !task.done).length;
         taskCount.textContent = `${remainingTasks} ${remainingTasks === 1 ? "task" : "tasks"} left`;
+        clearDoneButton.disabled = !tasks.some((task) => task.done);
       }
+
+      clearDoneButton.addEventListener("click", () => {
+        tasks = tasks.filter((task) => !task.done);
+        writeStorage(STORAGE_KEYS.tasks, tasks);
+        renderTasks();
+      });
 
       presets.forEach((preset, index) => {
         preset.addEventListener("click", () => {
